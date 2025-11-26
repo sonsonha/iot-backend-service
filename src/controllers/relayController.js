@@ -60,7 +60,7 @@ const set_relay = async (req, res, next) => {
         if (!relay) {
             return res.status(404).json({ error: 'Relay not found.' });
         }
-        if (new_relay_id) {
+        if (new_relay_id != relay_id) {
             const existingRelay = await Relay.findOne({ relay_id: new_relay_id, userID: userID });
             if (existingRelay) {
                 return res.status(400).json({ error: 'New relay id already exists.' });

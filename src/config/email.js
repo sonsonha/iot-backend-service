@@ -8,4 +8,5 @@ const transporter = nodeMailer.createTransport({
         pass: process.env.EMAIL_KEY,
     },
 });
+
 module.exports = transporter;
