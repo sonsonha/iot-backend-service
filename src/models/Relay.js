@@ -3,6 +3,7 @@ const Schema = mongoose.Schema;
 
 const RelaySchema = new Schema({
     userID: { type: Schema.Types.ObjectId, ref: 'Users' },
+    cabinetID: { type: Schema.Types.ObjectId, ref: 'Cabinet', required: true },
     
     relay_id: { type: Number, required: true },
     relay_name: { type: String },
@@ -10,6 +11,10 @@ const RelaySchema = new Schema({
     relay_home: { type: Boolean, required: true },
 });
 
-RelaySchema.index({ userID: 1, relay_id: 1 }, { unique: true });
+// RelaySchema.index({ userID: 1, relay_id: 1 }, { unique: true });
+RelaySchema.index(
+  { userID: 1, cabinetID: 1, relay_id: 1 },
+  { unique: true }
+);
 
 module.exports = mongoose.model('Relay', RelaySchema, 'Relay');

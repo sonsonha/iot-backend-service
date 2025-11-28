@@ -21,6 +21,8 @@ CabinetSchema.pre('save', function (next) {
   next();
 });
 
-CabinetSchema.index({ userID: 1, name: 1 }, { unique: true });
+// CabinetSchema.index({ userID: 1, name: 1 }, { unique: true });
+CabinetSchema.index({ userID: 1, deviceId: 1 }, { unique: true, sparse: true });
+
 
 module.exports = mongoose.model('Cabinet', CabinetSchema, 'Cabinet');
