@@ -1,7 +1,9 @@
 const mqtt = require('mqtt');
 require('dotenv').config();
 const modelUser = require('../models/Users');
-const sensorQueue = require('../queue/sensorQueue');
+const Cabinet = require('../models/Cabinet');
+
+const sensorQueue = require('../queue/sensorQueue');    
 const relayQueue = require('../queue/relayQueue');
 const userQueue = require('../queue/userQueue');
 const boardQueue = require('../queue/boardQueue');
@@ -22,7 +24,7 @@ const formatDate = (date) => {
     return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
 };
 
-const saveData = async (email, type, data, date, mode = undefined) => {
+const saveData = async (email, deviceId, type, data, date, mode = undefined) => {
     if (typeof date === 'string') {
         const [time, datePart] = date.split(' ');
         const [day, month, year] = datePart.split('/');
@@ -38,21 +40,33 @@ const saveData = async (email, type, data, date, mode = undefined) => {
     if (!user) {
         return;
     }
+
+    const cabinet = await Cabinet.findOne({ userID: user._id, deviceId: deviceId });
+    if (!cabinet) {
+        console.warn(`No cabinet found for user ${user.email} with deviceId ${deviceId}`);
+        return;
+    }
+    const cabinetID = cabinet._id;
+
     console.log(
-        `\x1b[0m{ Date: \x1b[32m${formatDate(date)}\x1b[0m, Email: \x1b[32m${email}\x1b[0m, Type: \x1b[32m${type}\x1b[0m, Data: \x1b[32m${data}\x1b[0m }\x1b[0m`
+      `\x1b[0m{ Date: \x1b[32m${formatDate(date)}\x1b[0m, Email: \x1b[32m${email}\x1b[0m, Device: \x1b[32m${deviceId}\x1b[0m, Type: \x1b[32m${type}\x1b[0m, Data: \x1b[32m${data}\x1b[0m }\x1b[0m`
     );
 
+    // console.log(
+    //     `\x1b[0m{ Date: \x1b[32m${formatDate(date)}\x1b[0m, Email: \x1b[32m${email}\x1b[0m, Type: \x1b[32m${type}\x1b[0m, Data: \x1b[32m${data}\x1b[0m }\x1b[0m`
+    // );
+
     if (type === 'temp') {
-        sensorQueue.add({ userID: user.id, sensor: 'temperature', data, date });
+        sensorQueue.add({ userID: user.id, cabinetID, sensor: 'temperature', data, date });
     }
     else if (type === 'humi') {
-        sensorQueue.add({ userID: user.id, sensor: 'humidity', data, date });
+        sensorQueue.add({ userID: user.id, cabinetID, sensor: 'humidity', data, date });
     }
     else if (type === 'location') {
-        sensorQueue.add({ userID: user.id, sensor: 'location', data, date });
+        sensorQueue.add({ userID: user.id, cabinetID, sensor: 'location', data, date });
     }
     else if (type === 'relay') {
-        relayQueue.add({ userID: user.id, data, date, email });
+        relayQueue.add({ userID: user.id, cabinetID, data, date, email });
     }
     else if (type === 'history') {
         if (!mode) {
@@ -69,18 +83,18 @@ const saveData = async (email, type, data, date, mode = undefined) => {
                 console.error("Temperature or humidity data is zero");
                 return;
             }
-            sensorQueue.add({ userID: user.id, sensor: 'temperature', data: parseFloat(temp), date });
-            sensorQueue.add({ userID: user.id, sensor: 'humidity', data: parseFloat(humi), date });
+            sensorQueue.add({ userID: user.id, cabinetID, sensor: 'temperature', data: parseFloat(temp), date });
+            sensorQueue.add({ userID: user.id, cabinetID, sensor: 'humidity', data: parseFloat(humi), date });
         }
         else if (mode === 'location') {
-            sensorQueue.add({ userID: user.id, sensor: 'location', data, date });
+            sensorQueue.add({ userID: user.id, cabinetID, sensor: 'location', data, date });
         }
     }
     else if (type === 'ip') {
-        userQueue.add({ userID: user.id, data, date });
+        userQueue.add({ userID: user.id, cabinetID, data, date });
     }
     else if (type === 'firmware') {
-        boardQueue.add({ userID: user.id, board: data, version: mode, date });
+        boardQueue.add({ userID: user.id, cabinetID, board: data, version: mode, date });
     }
 };
 
@@ -149,29 +163,33 @@ const subscribeToFeeds = (client, AIO_USERNAME) => {
         const feed = topic;
         try {
             const jsonData = JSON.parse(message.toString());
-            const { email, data, mode, time } = jsonData;
+            const { email, data, mode, time, deviceId } = jsonData;
             if (!email || data === undefined) {
                 console.warn('No email provided. Skipping saveData call.');
                 return;
             }
+            if (!deviceId) {
+                console.warn('No deviceId provided. Skipping saveData call.');
+                return;
+            }
             if (feed.includes('temperature')) {
-                saveData(email, 'temp', parseFloat(data), new Date());
+                saveData(email, deviceId, 'temp', parseFloat(data), new Date());
             } else if (feed.includes('humidity')) {
-                saveData(email, 'humi', parseFloat(data), new Date());
+                saveData(email, deviceId, 'humi', parseFloat(data), new Date());
             } else if (feed.includes('location')) {
-                saveData(email, 'location', data, new Date());
+                saveData(email, deviceId, 'location', data, new Date());
             }
             else if (feed.includes('relay')) {
-                saveData(email, 'relay', data, new Date());
+                saveData(email, deviceId, 'relay', data, new Date());
             }
             else if (feed.includes('history')) {
-                saveData(email, 'history', data, time, mode);
+                saveData(email, deviceId, 'history', data, time, mode);
             }
             else if (feed.includes('ip')) {
-                saveData(email, 'ip', data, new Date());
+                saveData(email, deviceId, 'ip', data, new Date());
             }
             else if (feed.includes('firmware')) {
-                saveData(email, 'firmware', data, new Date(), mode);
+                saveData(email, deviceId, 'firmware', data, new Date(), mode);
             }
         } catch (error) {
             console.error('Error saving data to MongoDB:', error);
@@ -351,12 +369,14 @@ const publishdata = async (req, res, next) => {
     if (!clients[username]) {
         return res.status(400).json({ error: 'MQTT not connected' });
     }
-    const { feed, relayid, scheduleid, state, mode, day, time, actions, AIO_USERNAME, email, deleteid } = req;
+    // const { feed, relayid, scheduleid, state, mode, day, time, actions, AIO_USERNAME, email, deleteid } = req;
+    const { feed, relayid, scheduleid, state, mode, day, time, actions, AIO_USERNAME, email, deleteid, deviceId } = req;
     let jsonData;
     if (mode === 'Schedule') {
         if (deleteid) {
             jsonData = JSON.stringify({
                 email: email,
+                deviceId,
                 mode: mode,
                 id: scheduleid,
                 delete: 'true',
@@ -365,6 +385,7 @@ const publishdata = async (req, res, next) => {
         else {
             jsonData = JSON.stringify({
                 email: email,
+                deviceId,
                 mode: mode,
                 id: scheduleid,
                 state: state ? 'true' : 'false',
@@ -378,6 +399,7 @@ const publishdata = async (req, res, next) => {
         const status = state ? 'ON' : 'OFF';
         jsonData = JSON.stringify({
             email: email,
+            deviceId,
             mode: mode,
             index: relayid,
             state: status
