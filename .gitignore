@@ -17,7 +17,7 @@ build/
 *.sublime-workspace
 .idea/
 .vscode/
-
+/scripts
 # Configuration files for GitHub Actions or CI/CD
 *.yml
 *.yaml

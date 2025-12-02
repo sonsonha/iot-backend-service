@@ -26,7 +26,7 @@ const add_relay = async (req, res, next) => {
         if (existingRelay) {
             return res.status(400).json({ error: 'Relay with this ID already exists for this user.' });
         }
-        const relayCount = await Relay.countDocuments({ userID });
+        const relayCount = await Relay.countDocuments({ userID, cabinetID: cabinetId });
         if (relayCount > 6 && req.role == 'user') {
             return res.status(400).json({ error: 'You can only request up to 6 relays of data. Please upgrade your account for more.' });
         }

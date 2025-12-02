@@ -16,7 +16,7 @@ relayQueue.process(async (job) => {
         const relay = await Relay.findOne({ relay_id: relay_id, userID: userID, cabinetID: cabinetID });
         if (!relay) {
             const { email } = job.data;
-            console.error(`Relay with ID ${relay_id} not found for user ${email}`);
+            console.error(`Relay with ID ${relay_id} of cabinet ${cabinetID} not found for user ${email}`);
             return;
         }
         relay.state = state === 'ON' ? true : false;
