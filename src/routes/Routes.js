@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../middlewares/authenticateToken');
 const checkRole = require('../middlewares/checkRole');
+const cabinetRoutes = require('./cabinetRoutes');
 
 const usersRouter = require('./userRoutes');
 const sensorRoutes = require('./sensorRoutes');
@@ -20,5 +21,6 @@ router.use('/relay', authenticateToken, checkRole, relayRoutes);
 router.use('/schedule', authenticateToken, checkRole, scheduleRoutes);
 router.use('/mqtt', authenticateToken, mqttRoutes);
 router.use('/firmware', authenticateToken, firmwareRoutes);
+router.use('/cabinet', cabinetRoutes);
 
 module.exports = router;

@@ -1,8 +1,13 @@
 const Firmware = require('../models/Firmware');
 const modelUser = require('../models/Users');
+const Cabinet = require('../models/Cabinet');
 
 const upload = async (req, res) => {
     try {
+        const userID = req.user.id;
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         if (!req.file) {
             return res.status(400).json({ message: 'No file uploaded' });
         }
@@ -13,13 +18,14 @@ const upload = async (req, res) => {
         if (board !== "Yolo Uno" && board !== "Relay 6ch") {
             return res.status(400).json({ message: 'Invalid board type.' });
         }
-        const existingFirmware = await Firmware.findOne({ board: board, version: version });
+        const existingFirmware = await Firmware.findOne({ board: board, version: version, cabinetID: cabinetId, userID });
         if (existingFirmware) {
             return res.status(400).json({ message: `Version already exists for this ${board}` });
         }
         const size = `${(req.file.size / 1024).toFixed(2)} KB`;
         const newFirmware = new Firmware({
-            userID: req.user.id,
+            userID,
+            cabinetID: cabinetId,
             board: board,
             file: {
                 data: req.file.buffer,
@@ -39,15 +45,19 @@ const upload = async (req, res) => {
 };
 
 const downloadFile = async (req, res) => {
-    const { board } = req.body;
     try {
+        const { board } = req.body;
+        const userID = req.user.id;
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         if (!board) {
             return res.status(400).json({ message: 'Board is required' });
         }
         if (board !== "Yolo Uno" && board !== "Relay 6ch") {
             return res.status(400).json({ message: 'Invalid board type.' });
         }
-        const firmware = await Firmware.findOne({ board: board })
+        const firmware = await Firmware.findOne({ board: board, cabinetID: cabinetId })
             .sort({ version: -1 })
             .exec();
 
@@ -69,6 +79,7 @@ const downloadFile = async (req, res) => {
             size: fileSize,
             contentType: contentType,
             version: firmware.version,
+            cabinetID: cabinetId
         });
     } catch (error) {
         console.error('Error downloading firmware:', error);
@@ -79,16 +90,19 @@ const downloadFile = async (req, res) => {
 };
 
 const getVersions = async (req, res) => {
-    const userId = req.user.id;
     try {
+        const userId = req.user.id;
+        const { cabinetId } = req.params;
         const { board } = req.body;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         if (!board) {
             return res.status(400).json({ message: 'Board is required' });
         }
         if (board !== "Yolo Uno" && board !== "Relay 6ch") {
             return res.status(400).json({ message: 'Invalid board type.' });
         }
-        const latestFirmware = await Firmware.findOne({ board })
+        const latestFirmware = await Firmware.findOne({ board, cabinetID: cabinetId, board })
             .sort({ version: -1 })
             .select('version size');
 
@@ -98,6 +112,7 @@ const getVersions = async (req, res) => {
         return res.status(200).json({
             version: latestFirmware.version,
             size: latestFirmware.size,
+            cabinetID: cabinetId,
         });
     } catch (error) {
         console.error('Error retrieving firmware versions:', error);

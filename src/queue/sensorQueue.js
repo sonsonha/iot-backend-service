@@ -11,13 +11,14 @@ const sensorQueue = new Queue('sensorQueue', {
 });
 
 sensorQueue.process(async (job) => {
-    const { userID, sensor, data, date } = job.data;
+    const { userID, cabinetID, sensor, data, date } = job.data;
     try {
         switch (sensor) {
             case 'temperature':
                 if (parseFloat(data) === 0) { console.error("Temperature no data"); break; }
                 const tempData = new TemperatureSensors({
                     userID: userID,
+                    cabinetID: cabinetID,
                     data: data,
                     Date: date,
                 });
@@ -28,6 +29,7 @@ sensorQueue.process(async (job) => {
                 if (parseFloat(data) === 0) { console.error("Humidity no data"); break; }
                 const humidityData = new HumiditySensors({
                     userID: userID,
+                    cabinetID: cabinetID,
                     data: data,
                     Date: date,
                 });
@@ -38,6 +40,7 @@ sensorQueue.process(async (job) => {
                 if (parseFloat(X) === 0 || parseFloat(Y) === 0) { console.error("Location no data"); break; }
                 const locationData = new Location({
                     userID: userID,
+                    cabinetID: cabinetID,
                     X: X,
                     Y: Y,
                     Date: date,

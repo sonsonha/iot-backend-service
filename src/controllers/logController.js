@@ -2,23 +2,36 @@ const HumiditySensors = require('../models/HumiditySensors');
 const TemperatureSensors = require('../models/TemperatureSensors');
 const modelLog = require('../models/Log');
 const logQueue = require('../queue/logQueue');
+const Cabinet = require('../models/Cabinet');
+
 
 const setLog = async (req, res) => {
     try {
         const userID = req.user.id;
+        const { cabinetId } = req.params;
+
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) {
+            return res.status(404).json({ message: 'Cabinet not found' });
+        }
+
         const { activity } = req;
         if (!activity) {
             return res.status(400).json({ error: 'Activity is required.' });
         }
-        logQueue.add({ userID, activity });
-        return res.status(200).json({ message: activity });;
+
+        const date = new Date();
+
+        // ✅ truyền cabinetID + date đúng field
+        logQueue.add({ userID, cabinetID: cabinetId, activity, date });
+
+        return res.status(200).json({ message: activity });
+    } catch (error) {
+        console.error('setLog error:', error);
+        res.status(500).json({ error: 'Server error' });
     }
-    catch (error) {
-        res.status(500).json({
-            error: 'Server error',
-        });
-    }
-}
+};
+
 
 const getNumberOfDays = (startDate, endDate) => {
     const timeDifference = endDate - startDate;
@@ -28,9 +41,15 @@ const getNumberOfDays = (startDate, endDate) => {
 
 const getLog = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const { start, end } = req.body;
+        const userID = req.user.id;
+        const { cabinetId } = req.params;
 
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) {
+            return res.status(404).json({ message: 'Cabinet not found' });
+        }
+
+        const { start, end } = req.body;
         if (!start || !end) {
             return res.status(400).json({ error: 'Start and end day are requried' });
         }
@@ -40,6 +59,7 @@ const getLog = async (req, res) => {
 
         startDate.setHours(0, 0, 0, 0);
         endDate.setHours(23, 59, 59, 999);
+
         const currentDate = new Date();
         currentDate.setHours(0, 0, 0, 0);
 
@@ -48,20 +68,22 @@ const getLog = async (req, res) => {
         }
 
         if (getNumberOfDays(startDate, currentDate) > 7 && req.role == 'user') {
-            return res.status(400).json({ error: 'You can only request up to 7 days of data. Please upgrade your account for more.' });
+            return res.status(400).json({
+                error:
+                    'You can only request up to 7 days of data. Please upgrade your account for more.',
+            });
         }
 
-        const logs = await modelLog.find({
-            userID: userId,
-            Date: {
-                $gte: startDate,
-                $lte: endDate
-            }
-        })
+        const logs = await modelLog
+            .find({
+                userID,
+                cabinetID: cabinetId,              // ✅ filter theo tủ
+                Date: { $gte: startDate, $lte: endDate },
+            })
             .select('activity Date')
             .exec();
 
-        const formattedLogs = logs.map(log => {
+        const formattedLogs = logs.map((log) => {
             const date = new Date(log.Date);
             const hours = String(date.getHours()).padStart(2, '0');
             const minutes = String(date.getMinutes()).padStart(2, '0');
@@ -72,16 +94,14 @@ const getLog = async (req, res) => {
 
             return {
                 ...log.toObject(),
-                Date: `${hours}/${minutes}/${seconds} ${day}/${month}/${year}`
+                Date: `${hours}/${minutes}/${seconds} ${day}/${month}/${year}`,
             };
         });
 
         return res.status(200).json(formattedLogs);
-
     } catch (error) {
-        return res.status(500).json({
-            error: 'Server error',
-        });
+        console.error('getLog error:', error);
+        return res.status(500).json({ error: 'Server error' });
     }
 };
 
@@ -113,6 +133,10 @@ const getTemp = async (req, res) => {
     try {
         const userId = req.user.id;
         const { time } = req.body;
+        const { cabinetId } = req.params;
+        // const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID: userId });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
 
         if (!time || !userId) {
             return res.status(400).json({ error: 'Time period and user ID are required.' });
@@ -128,6 +152,7 @@ const getTemp = async (req, res) => {
 
         const data = await TemperatureSensors.find({
             userID: userId,
+            cabinetID: cabinetId,
             Date: {
                 $gte: startDate,
                 $lte: endDate
@@ -198,6 +223,10 @@ const getHumi = async (req, res) => {
     try {
         const userId = req.user.id;
         const { time } = req.body;
+        const { cabinetId } = req.params;
+        // const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID: userId });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
 
         if (!time || !userId) {
             return res.status(400).json({ error: 'Time period and user ID are required.' });
@@ -213,6 +242,7 @@ const getHumi = async (req, res) => {
 
         const data = await HumiditySensors.find({
             userID: userId,
+            cabinetID: cabinetId,
             Date: {
                 $gte: startDate,
                 $lte: endDate

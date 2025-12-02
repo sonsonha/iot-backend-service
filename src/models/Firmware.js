@@ -3,6 +3,8 @@ const Schema = mongoose.Schema;
 
 const FirmwareSchema = new Schema({
     userID: { type: Schema.Types.ObjectId, ref: 'Users', required: true },
+    cabinetID: { type: Schema.Types.ObjectId, ref: 'Cabinet', required: true },
+
     board: {
         type: String,
         required: true,
@@ -22,6 +24,11 @@ const FirmwareSchema = new Schema({
         required: true,
     },
 });
+
+FirmwareSchema.index(
+  { userID: 1, cabinetID: 1, board: 1, version: 1 },
+  { unique: true }
+);
 
 FirmwareSchema.pre('save', function (next) {
     const validUserID = '66c38bb86a798188855a88ea';

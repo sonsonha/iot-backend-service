@@ -3,6 +3,8 @@ const Schema = mongoose.Schema;
 
 const Board = new Schema({
     userID: { type: Schema.Types.ObjectId, ref: 'Users', required: true },
+    cabinetID:{ type: Schema.Types.ObjectId, ref: 'Cabinet', required: true },
+
     version: {
         type: String,
         required: true,
@@ -15,6 +17,11 @@ const Board = new Schema({
     },
     Date: { type: Date, required: true },
 });
+
+Board.index(
+  { userID: 1, cabinetID: 1, board: 1 },
+  { unique: true }
+);
 
 module.exports = mongoose.model(
     'Board',

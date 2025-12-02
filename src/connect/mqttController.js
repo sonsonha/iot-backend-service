@@ -24,7 +24,7 @@ const formatDate = (date) => {
     return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
 };
 
-const saveData = async (email, deviceId, type, data, date, mode = undefined) => {
+const saveData = async (email, device_id, type, data, date, mode = undefined) => {
     if (typeof date === 'string') {
         const [time, datePart] = date.split(' ');
         const [day, month, year] = datePart.split('/');
@@ -41,15 +41,15 @@ const saveData = async (email, deviceId, type, data, date, mode = undefined) => 
         return;
     }
 
-    const cabinet = await Cabinet.findOne({ userID: user._id, deviceId: deviceId });
+    const cabinet = await Cabinet.findOne({ userID: user._id, device_id: device_id });
     if (!cabinet) {
-        console.warn(`No cabinet found for user ${user.email} with deviceId ${deviceId}`);
+        console.warn(`No cabinet found for user ${user.email} with device_id ${device_id}`);
         return;
     }
     const cabinetID = cabinet._id;
 
     console.log(
-      `\x1b[0m{ Date: \x1b[32m${formatDate(date)}\x1b[0m, Email: \x1b[32m${email}\x1b[0m, Device: \x1b[32m${deviceId}\x1b[0m, Type: \x1b[32m${type}\x1b[0m, Data: \x1b[32m${data}\x1b[0m }\x1b[0m`
+      `\x1b[0m{ Date: \x1b[32m${formatDate(date)}\x1b[0m, Email: \x1b[32m${email}\x1b[0m, Device: \x1b[32m${device_id}\x1b[0m, Type: \x1b[32m${type}\x1b[0m, Data: \x1b[32m${data}\x1b[0m }\x1b[0m`
     );
 
     // console.log(
@@ -97,6 +97,40 @@ const saveData = async (email, deviceId, type, data, date, mode = undefined) => 
         boardQueue.add({ userID: user.id, cabinetID, board: data, version: mode, date });
     }
 };
+
+const createCabinetIfNotExists = async (email, deviceId) => {
+  const user = await modelUser.findOne({ email });
+  if (!user) {
+    console.warn(`No user found with email ${email}`);
+    return;
+  }
+
+  const userID = user._id;
+
+  const existing = await Cabinet.findOne({ userID, device_id: deviceId });
+  if (existing) {
+    // console.log(
+    //   `Cabinet already exists for user ${user.email} with device_id ${deviceId}`
+    // );
+    return;
+  }
+
+  const count = await Cabinet.countDocuments({ userID });
+  const name = `Cabinet ${count + 1}`;
+
+  const newCabinet = new Cabinet({
+    userID,
+    name,
+    description: '',
+    device_id: deviceId,
+  });
+
+  await newCabinet.save();
+  console.log(
+    `Created new cabinet "${name}" for user ${user.email} with device_id ${deviceId}`
+  );
+};
+
 
 const connectAllUsers = async () => {
     const users = await modelUser.find();
@@ -148,14 +182,15 @@ const subscribeToFeeds = (client, AIO_USERNAME) => {
     const relayFeed = `${AIO_USERNAME}/feeds/relay`;
     const ipFeed = `${AIO_USERNAME}/feeds/ip`;
     const firmwareFeed = `${AIO_USERNAME}/feeds/firmware`;
+    const cabinet = `${AIO_USERNAME}/feeds/device_id`;
 
-    [tempFeed, humFeed, historyFeed, locationFeed, relayFeed, ipFeed, firmwareFeed].forEach((feed) => {
+    [tempFeed, humFeed, historyFeed, locationFeed, relayFeed, ipFeed, firmwareFeed, cabinet].forEach((feed) => {
         client.subscribe(feed, (err) => {
             if (err) {
                 console.error('Subscription error:', err);
             } else {
                 console.log(`Subscribed to feed: ${feed}`);
-            }
+            }   
         });
     });
 
@@ -163,33 +198,60 @@ const subscribeToFeeds = (client, AIO_USERNAME) => {
         const feed = topic;
         try {
             const jsonData = JSON.parse(message.toString());
-            const { email, data, mode, time, deviceId } = jsonData;
-            if (!email || data === undefined) {
-                console.warn('No email provided. Skipping saveData call.');
+
+            if (feed.includes('device_id')) {
+            const { email, device_id } = jsonData;
+
+            if (!email) {
+                console.warn('No email provided in device_id feed');
                 return;
             }
-            if (!deviceId) {
-                console.warn('No deviceId provided. Skipping saveData call.');
+            if (!device_id) {
+                console.warn('No device_id provided in device_id feed');
+                return;
+            }
+
+            await createCabinetIfNotExists(email, device_id);
+            return;
+            }
+
+            const { email, data, mode, time, device_id } = jsonData;
+            // if (data === undefined) {
+            //     console.warn('Undefined data!');
+            //     // return;  
+            // }
+            if (!feed.includes('relay') && !feed.includes('ip') && !feed.includes('firmware')) {
+                if (data === undefined) {
+                    console.warn('Undefined data for feed:', feed, 'payload:', jsonData);
+                    return;
+                }
+            }
+            if (!email) {
+                console.warn('No email provided. Skipping saveData call!');
+                return;
+            }
+            if (!device_id) {
+                console.warn('No device_id provided. Skipping saveData call.');
                 return;
             }
             if (feed.includes('temperature')) {
-                saveData(email, deviceId, 'temp', parseFloat(data), new Date());
+                saveData(email, device_id, 'temp', parseFloat(data), new Date());
             } else if (feed.includes('humidity')) {
-                saveData(email, deviceId, 'humi', parseFloat(data), new Date());
+                saveData(email, device_id, 'humi', parseFloat(data), new Date());
             } else if (feed.includes('location')) {
-                saveData(email, deviceId, 'location', data, new Date());
+                saveData(email, device_id, 'location', data, new Date());
             }
             else if (feed.includes('relay')) {
-                saveData(email, deviceId, 'relay', data, new Date());
+                saveData(email, device_id, 'relay', data, new Date());
             }
             else if (feed.includes('history')) {
-                saveData(email, deviceId, 'history', data, time, mode);
+                saveData(email, device_id, 'history', data, time, mode);
             }
             else if (feed.includes('ip')) {
-                saveData(email, deviceId, 'ip', data, new Date());
+                saveData(email, device_id, 'ip', data, new Date());
             }
             else if (feed.includes('firmware')) {
-                saveData(email, deviceId, 'firmware', data, new Date(), mode);
+                saveData(email, device_id, 'firmware', data, new Date(), mode);
             }
         } catch (error) {
             console.error('Error saving data to MongoDB:', error);
@@ -344,6 +406,18 @@ const newconnect = async (req, res) => {
                     });
                 }
             } catch (error) {
+                    console.error('name:', error.name);
+                    console.error('code:', error.code);
+                    console.error('message:', error.message);
+                    console.error('keyPattern:', error.keyPattern);
+                    console.error('keyValue:', error.keyValue);
+
+                    if (error.code === 11000) {
+                        const field = Object.keys(error.keyPattern)[0];
+                        return res.status(400).json({
+                        error: `${field} already exists`
+                        });
+                    }
                 console.error('Error saving user profile after MQTT connection:', error);
                 return res.status(500).json({ error: 'Error saving user profile after successful MQTT connection' });
             }
@@ -370,13 +444,13 @@ const publishdata = async (req, res, next) => {
         return res.status(400).json({ error: 'MQTT not connected' });
     }
     // const { feed, relayid, scheduleid, state, mode, day, time, actions, AIO_USERNAME, email, deleteid } = req;
-    const { feed, relayid, scheduleid, state, mode, day, time, actions, AIO_USERNAME, email, deleteid, deviceId } = req;
+    const { feed, relayid, scheduleid, state, mode, day, time, actions, AIO_USERNAME, email, deleteid, device_id } = req;
     let jsonData;
     if (mode === 'Schedule') {
         if (deleteid) {
             jsonData = JSON.stringify({
                 email: email,
-                deviceId,
+                device_id,
                 mode: mode,
                 id: scheduleid,
                 delete: 'true',
@@ -385,9 +459,9 @@ const publishdata = async (req, res, next) => {
         else {
             jsonData = JSON.stringify({
                 email: email,
-                deviceId,
+                device_id,
                 mode: mode,
-                id: scheduleid,
+                id: scheduleid, 
                 state: state ? 'true' : 'false',
                 days: day,
                 time: time,
@@ -399,17 +473,29 @@ const publishdata = async (req, res, next) => {
         const status = state ? 'ON' : 'OFF';
         jsonData = JSON.stringify({
             email: email,
-            deviceId,
+            device_id: device_id,
             mode: mode,
             index: relayid,
-            state: status
+            state: status,
         });
     }
     const feedPath = `${AIO_USERNAME}/feeds/${feed}`;
+    console.log('>>> publishdata called with: ', {
+    username,
+    feedPath,
+    mode,
+    scheduleid,
+    device_id,
+    });
+    console.log('MQTT client connected?', clients[username]?.connected);
+    console.log('Payload:', jsonData);
+
     clients[username].publish(feedPath, jsonData, (err) => {
         if (err) {
+            console.error('MQTT publish error:', err);
             return res.status(500).json({ error: 'Failed to publish data' });
         } else {
+            console.log('MQTT publish OK');
             next();
         }
     });

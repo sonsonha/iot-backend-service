@@ -2,16 +2,20 @@ const HumiditySensors = require('../models/HumiditySensors');
 const TemperatureSensors = require('../models/TemperatureSensors');
 const Location = require('../models/Location');
 const sensorQueue = require('../queue/sensorQueue');
+const Cabinet = require('../models/Cabinet');
 
 const setTemp = async (req, res) => {
     try {
         const userID = req.user.id;
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         const { data } = req.body;
         let { date } = req.body;
         if (date === undefined) {
             date = new Date();
         }
-        sensorQueue.add({ userID, sensor: 'temperature', data, date });
+        sensorQueue.add({ userID, cabinetID: cabinetId, sensor: 'temperature', data, date });
         return res.status(200).json({
             data: data,
         });
@@ -27,10 +31,13 @@ const setHumi = async (req, res) => {
         const userID = req.user.id;
         const { data } = req.body;
         let { date } = req.body;
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         if (date === undefined) {
             date = new Date();
         }
-        sensorQueue.add({ userID, sensor: 'humidity', data, date });
+        sensorQueue.add({ userID, cabinetID: cabinetId, sensor: 'humidity', data, date });
         return res.status(200).json({
             data: data,
         });
@@ -46,6 +53,9 @@ const setLocation = async (req, res) => {
         const userID = req.user.id;
         const { data } = req.body;
         let { date } = req.body;
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         if (date === undefined) {
             date = new Date();
         }
@@ -54,7 +64,7 @@ const setLocation = async (req, res) => {
                 error: 'Wrong format. Expected "X-Y" format.',
             });
         }
-        sensorQueue.add({ userID, sensor: 'location', data, date });
+        sensorQueue.add({ userID, cabinetID: cabinetId, sensor: 'location', data, date });
         return res.status(200).json({
             data: data,
         });
@@ -68,7 +78,10 @@ const setLocation = async (req, res) => {
 const getTemp = async (req, res) => {
     try {
         const userID = req.user.id;
-        const latestData = await TemperatureSensors.findOne({ userID: userID })
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
+        const latestData = await TemperatureSensors.findOne({ userID: userID, cabinetID: cabinetId })
             .sort({ Date: -1 })
             .exec();
 
@@ -78,7 +91,7 @@ const getTemp = async (req, res) => {
             });
         } else {
             return res.status(404).json({
-                error: 'No temperature data found for this user.',
+                error: 'No temperature data found for this cabinet.',
             });
         }
     } catch (error) {
@@ -91,7 +104,10 @@ const getTemp = async (req, res) => {
 const getHumi = async (req, res) => {
     try {
         const userID = req.user.id;
-        const latestData = await HumiditySensors.findOne({ userID: userID })
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
+        const latestData = await HumiditySensors.findOne({ userID: userID, cabinetID: cabinetId })
             .sort({ Date: -1 })
             .exec();
 
@@ -101,7 +117,7 @@ const getHumi = async (req, res) => {
             });
         } else {
             return res.status(404).json({
-                error: 'No humidity data found for this user.',
+                error: 'No humidity data found for this cabinet.',
             });
         }
     } catch (error) {
@@ -114,7 +130,10 @@ const getHumi = async (req, res) => {
 const getLocation = async (req, res) => {
     try {
         const userID = req.user.id;
-        const location = await Location.findOne({ userID: userID })
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
+        const location = await Location.findOne({ userID: userID, cabinetID: cabinetId })
             .sort({ Date: -1 })
             .exec();
 
@@ -134,5 +153,32 @@ const getLocation = async (req, res) => {
         });
     }
 }
+
+// const getLocations = async (req, res) => {
+//     try {
+//         const userID = req.user.id;
+//         const { cabinetId } = req.params;
+//         const cabinet = await Cabinet.find({ userID });
+//         if (cabinet.length() === 0) return res.status(404).json({ message: 'No cabinets found' });
+//         const locations = await Location.find({ userID: userID })
+//             .sort({ Date: -1 })
+//             .exec();
+
+//         if (locations.length() > 0) {
+//             return res.status(200).json({
+//                 X: location.X,
+//                 Y: location.Y,
+//             });
+//         } else {
+//             return res.status(404).json({
+//                 error: 'No location data found for this user.',
+//             });
+//         }
+//     } catch (error) {
+//         return res.status(500).json({
+//             error: 'Server error',
+//         });
+//     }
+// }
 
 module.exports = { setTemp, setHumi, setLocation, getTemp, getHumi, getLocation };

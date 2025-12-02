@@ -9,8 +9,13 @@ const boardQueue = new Queue('boardQueue', {
 });
 
 boardQueue.process(async (job) => {
-    const { userID, board, version, date = new Date() } = job.data;
-    const boards = await modelBoard.findOne({ userID: userID, board: board });
+    const { userID, cabinetID, board, version, date = new Date() } = job.data;
+
+    if (!userID || !cabinetID || !board || !version) {
+      throw new Error('Missing required board queue data');
+    }
+
+    const boards = await modelBoard.findOne({ userID: userID, cabinetID: cabinetID, board: board });
 
     if (boards) {
         boards.version = version;
@@ -24,6 +29,7 @@ boardQueue.process(async (job) => {
     } else {
         const newBoard = new modelBoard({
             userID: userID,
+            cabinetID: cabinetID,
             board: board,
             version: version,
             Date: date

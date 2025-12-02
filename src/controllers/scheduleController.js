@@ -1,13 +1,14 @@
 const Schedule = require('../models/Schedule');
+const Cabinet = require('../models/Cabinet');
 const modelUser = require('../models/Users');
 
-const generateUniqueScheduleId = async (userID) => {
+const generateUniqueScheduleId = async (userID, cabinetID) => {
     let scheduleId;
     let isUnique = false;
 
     while (!isUnique) {
         scheduleId = Math.floor(Math.random() * 20) + 1;
-        const existingSchedule = await Schedule.findOne({ userID, schedule_id: scheduleId });
+        const existingSchedule = await Schedule.findOne({ userID, schedule_id: scheduleId, cabinetID });
         if (!existingSchedule) {
             isUnique = true;
         }
@@ -18,7 +19,10 @@ const generateUniqueScheduleId = async (userID) => {
 const add_schedule = async (req, res, next) => {
     try {
         const userID = req.user.id;
+        const { cabinetId } = req.params;
         const { schedule_name, day, time, actions, } = req.body;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         if (!userID) {
             return res.status(400).json({ error: 'User id is required.' });
         }
@@ -28,12 +32,12 @@ const add_schedule = async (req, res, next) => {
         if (!day || !time || !actions) {
             return res.status(400).json({ error: 'day, time and actions are required.' });
         }
-        const existingSchedule = await Schedule.findOne({ userID, schedule_name });
+        const existingSchedule = await Schedule.findOne({ userID, schedule_name, cabinetID: cabinetId });
         if (existingSchedule) {
             return res.status(400).json({ error: 'This schedule already exists for this user.' });
         }
-        const schedule_id = await generateUniqueScheduleId(userID);
-        const schedule = new Schedule({ userID, schedule_id, schedule_name, state: false, day, time, actions });
+        const schedule_id = await generateUniqueScheduleId(userID, cabinetId);
+        const schedule = new Schedule({ userID, cabinetID: cabinetId, schedule_id, schedule_name, state: false, day, time, actions });
         await schedule.save();
         const user = await modelUser.findById(userID);
         req.mode = 'Schedule';
@@ -46,6 +50,7 @@ const add_schedule = async (req, res, next) => {
         req.activity = `Schedule ${schedule_name} added`;
         req.AIO_USERNAME = user.AIO_USERNAME;
         req.username = user.username;
+        req.device_id = cabinet.device_id;
         req.actions = req.actions.map(action => {
             const { _id, ...rest } = action._doc;
             return rest;
@@ -61,7 +66,11 @@ const add_schedule = async (req, res, next) => {
 const get_schedule = async (req, res) => {
     try {
         const userID = req.user.id;
-        const schedules = await Schedule.find({ userID: userID });
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
+
+        const schedules = await Schedule.find({ userID: userID, cabinetID: cabinetId });
         const schedulesArray = schedules.map(schedule => {
             if (schedule.actions) {
                 schedule.actions = schedule.actions.map(({ _id, ...rest }) => rest);
@@ -80,13 +89,16 @@ const get_schedule = async (req, res) => {
 const set_schedule = async (req, res, next) => {
     try {
         const userID = req.user.id;
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         const { schedule_id, new_schedule_name, new_day, new_time, new_actions } = req.body;
 
         if (!schedule_id) {
             return res.status(400).json({ error: 'Schedule id is required.' });
         }
 
-        const schedule = await Schedule.findOne({ schedule_id: schedule_id, userID: userID });
+        const schedule = await Schedule.findOne({ schedule_id: schedule_id, userID: userID, cabinetID: cabinetId });
         if (!schedule) {
             return res.status(404).json({ error: 'Schedule not found.' });
         }
@@ -126,6 +138,7 @@ const set_schedule = async (req, res, next) => {
         req.activity = result.trim();
         req.AIO_USERNAME = user.AIO_USERNAME;
         req.username = user.username;
+        req.device_id = cabinet.device_id;
         req.actions = req.actions.map(action => {
             const { _id, ...rest } = action._doc;
             return rest;
@@ -141,6 +154,9 @@ const set_schedule = async (req, res, next) => {
 const set_status = async (req, res, next) => {
     try {
         const userID = req.user.id;
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         const { schedule_id, state } = req.body;
         if (!schedule_id) {
             return res.status(400).json({ error: 'Schedule id is required.' });
@@ -148,7 +164,7 @@ const set_status = async (req, res, next) => {
         if (state === undefined) {
             return res.status(400).json({ error: 'State is required.' });
         }
-        const schedule = await Schedule.findOne({ schedule_id: schedule_id, userID: userID });
+        const schedule = await Schedule.findOne({ schedule_id: schedule_id, userID: userID, cabinetID: cabinetId });
         if (!schedule) {
             return res.status(404).json({ error: 'Schedule not found.' });
         }
@@ -165,6 +181,7 @@ const set_status = async (req, res, next) => {
         req.activity = `Schedule ${schedule.schedule_name} ${schedule.state ? 'ON' : 'OFF'}`;
         req.AIO_USERNAME = user.AIO_USERNAME;
         req.username = user.username;
+        req.device_id = cabinet.device_id;
         req.actions = req.actions.map(action => {
             const { _id, ...rest } = action._doc;
             return rest;
@@ -181,11 +198,14 @@ const set_status = async (req, res, next) => {
 const delete_schedule = async (req, res, next) => {
     try {
         const userID = req.user.id;
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         const { schedule_id } = req.body;
         if (!schedule_id) {
             return res.status(400).json({ error: 'Schedule id is required.' });
         }
-        const schedule = await Schedule.findOne({ schedule_id: schedule_id, userID: userID });
+        const schedule = await Schedule.findOne({ schedule_id: schedule_id, userID: userID, cabinetID: cabinetId });
         if (!schedule) {
             return res.status(404).json({ error: 'Schedule not found.' });
         }
@@ -196,6 +216,7 @@ const delete_schedule = async (req, res, next) => {
         req.scheduleid = schedule_id;
         req.deleteid = true;
         req.feed = 'schedule';
+        req.device_id = cabinet.device_id;
         const name = schedule.schedule_name;
         await schedule.deleteOne();
         req.activity = `Schedule ${name} deleted.`;
@@ -211,9 +232,13 @@ const delete_schedule = async (req, res, next) => {
 const get_schedule_home = async (req, res) => {
     try {
         const userID = req.user.id;
+        const { cabinetId } = req.params;
+        const cabinet = await Cabinet.findOne({ _id: cabinetId, userID });
+        if (!cabinet) return res.status(404).json({ message: 'Cabinet not found' });
         const day = [req.body.day];
         const schedules = await Schedule.find({
             userID: userID,
+            cabinetID: cabinetId,
             day: { $in: day }
         });
 
