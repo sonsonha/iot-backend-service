@@ -10,10 +10,14 @@ const relayQueue = new Queue('relayQueue', {
 });
 
 relayQueue.process(async (job) => {
-    const { userID, cabinetID, data, date } = job.data;
+    const { userID, cabinetID, data, date, email } = job.data;
+    if (typeof data !== 'string') {
+        console.error('Invalid relay data (not string):', data);
+        return;
+    }
     try {
         const [relay_id, state] = data.split('-');
-        const relay = await Relay.findOne({ relay_id: relay_id, userID: userID, cabinetID: cabinetID });
+        const relay = await Relay.findOne({ relay_id: relay_id, email: email, cabinetID: cabinetID });
         if (!relay) {
             const { email } = job.data;
             console.error(`Relay with ID ${relay_id} of cabinet ${cabinetID} not found for user ${email}`);

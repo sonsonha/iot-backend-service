@@ -41,7 +41,6 @@ const login = async (req, res) => {
 
     const userID = user._id;
 
-    // 🔹 chỉ lấy danh sách tủ, KHÔNG lấy relay/schedule/sensor ở đây
     const cabinets = await Cabinet.find({ userID }).sort({ createdAt: 1 }).lean();
 
     const { password: _, ...userProfile } = user;
@@ -51,7 +50,7 @@ const login = async (req, res) => {
       accessToken,
       refreshToken,
       profile: userProfile,
-      cabinets,          // 🔹 app dùng cái này để hiển thị list tủ
+      cabinets,
     });
 
   } catch (error) {
@@ -59,75 +58,6 @@ const login = async (req, res) => {
     return res.status(500).json({ error: 'Server error' });
   }
 };
-
-// const login = async (req, res) => {
-//     try {
-//         const { email } = req;
-//         const { password } = req.body;
-
-//         const user = await modelUser.findOne({ email }).select('+password').lean().exec();
-//         if (!user) {
-//             return res.status(401).json({ error: 'Invalid username or password' });
-//         }
-
-//         const isPasswordValid = await bcrypt.compare(password, user.password);
-//         if (!isPasswordValid) {
-//             return res.status(401).json({ error: 'Invalid username or password' });
-//         }
-
-//         const accessToken = JWT.sign({ id: user._id }, process.env.accessTokenSecret, { expiresIn: '1h' });
-//         const refreshToken = JWT.sign({ id: user._id }, process.env.refreshTokenSecret, { expiresIn: '7d' });
-
-//         await modelUser.updateOne({ _id: user._id }, { refreshToken });
-
-//         const dayOfWeek = new Date().getDay();
-//         const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-//         const day = daysOfWeek[dayOfWeek];
-
-//         const userID = user._id;
-//         const cabinets = Cabinet.find({userID}).lean();
-//         const [relays, relays_home, latestTemp, latestHumi, latestLocation, schedules, schedules_home] = await Promise.all([
-//             Relay.find({ userID }).lean(),
-//             Relay.find({ userID, relay_home: true }).lean(),
-//             TemperatureSensors.findOne({ userID }).sort({ Date: -1 }).select('data').lean().exec(),
-//             HumiditySensors.findOne({ userID }).sort({ Date: -1 }).select('data').lean().exec(),
-//             Location.findOne({ userID }).sort({ Date: -1 }).select('X Y').lean().exec(),
-//             Schedule.find({ userID }).lean(),
-//             Schedule.find({ userID, day: { $in: day } }).lean()
-//         ]);
-
-//         if (latestLocation) {
-//             latestLocation["data"] = `${latestLocation.X}-${latestLocation.Y}`;
-//             delete latestLocation.X;
-//             delete latestLocation.Y;
-//         }
-
-//         const temperature = latestTemp?.data || 0.0;
-//         const humidity = latestHumi?.data || 0.0;
-//         const location = latestLocation?.data || "10.7736288-106.6602627";
-
-//         const { password: _, ...userProfile } = user;
-
-//         return res.status(200).json({
-//             message: 'Login successful',
-//             accessToken,
-//             refreshToken,
-//             temperature,
-//             humidity,
-//             location,
-//             relays,
-//             relays_home,
-//             profile: userProfile,
-//             schedules,
-//             schedules_home,
-//         });
-
-//     } catch (error) {
-//         console.error(error);
-//         return res.status(500).json({ error: 'Server error' });
-//     }
-// };
-
 
 const register = async (req, res, next) => {
     try {
@@ -137,9 +67,7 @@ const register = async (req, res, next) => {
                 message: 'Username, fullname, email, password ,phone, AIO_USERNAME and AIO_KEY are required.',
             });
         }
-        // const existingUser = await modelUser.findOne({
-        //     $or: [{ email }, { username }]
-        // });
+
         const existingUser = await modelUser.findOne({
           $or: [
             { email },
@@ -150,11 +78,6 @@ const register = async (req, res, next) => {
           ]
         });
 
-        // if (existingUser) {
-        //     return res.status(400).json({
-        //         error: 'Email or username already exists.',
-        //     });
-        // }
         if (existingUser) {
           let conflictField = '';
           if (existingUser.email === email) conflictField = 'email';

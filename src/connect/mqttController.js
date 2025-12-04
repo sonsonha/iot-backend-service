@@ -52,10 +52,6 @@ const saveData = async (email, device_id, type, data, date, mode = undefined) =>
       `\x1b[0m{ Date: \x1b[32m${formatDate(date)}\x1b[0m, Email: \x1b[32m${email}\x1b[0m, Device: \x1b[32m${device_id}\x1b[0m, Type: \x1b[32m${type}\x1b[0m, Data: \x1b[32m${data}\x1b[0m }\x1b[0m`
     );
 
-    // console.log(
-    //     `\x1b[0m{ Date: \x1b[32m${formatDate(date)}\x1b[0m, Email: \x1b[32m${email}\x1b[0m, Type: \x1b[32m${type}\x1b[0m, Data: \x1b[32m${data}\x1b[0m }\x1b[0m`
-    // );
-
     if (type === 'temp') {
         sensorQueue.add({ userID: user.id, cabinetID, sensor: 'temperature', data, date });
     }
