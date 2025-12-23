@@ -336,15 +336,9 @@ curl -X POST http://localhost:3001/login \
 
 ---
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
 ## 👥 Authors
 
-- **Your Name** - *Backend Development & System Design*
+- **Danh Son Ha & Nguyen Anh Tuan** - *Backend Development & System Design*
 
 ---
 
